@@ -20,9 +20,9 @@ os_timer_t checkTimer_wifistate;
 
 //°´¼ü¶¨Òå
 #define GPIO_KEY_NUM                            1
-#define KEY_0_IO_MUX                            PERIPHS_IO_MUX_MTMS_U
-#define KEY_0_IO_NUM                            14
-#define KEY_0_IO_FUNC                           FUNC_GPIO14
+#define KEY_0_IO_MUX                            PERIPHS_IO_MUX_GPIO2_U
+#define KEY_0_IO_NUM                            2
+#define KEY_0_IO_FUNC                           FUNC_GPIO2
 LOCAL key_typedef_t * singleKey[GPIO_KEY_NUM];
 LOCAL keys_typedef_t keys;
 

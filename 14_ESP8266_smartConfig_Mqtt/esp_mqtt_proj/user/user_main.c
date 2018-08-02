@@ -187,7 +187,7 @@ void user_init(void) {
 	MQTT_OnDisconnected(&mqttClient, mqttDisconnectedCb);
 	MQTT_OnPublished(&mqttClient, mqttPublishedCb);
 	MQTT_OnData(&mqttClient, mqttDataCb);
-
+  //  WIFI_Connect(sysCfg.sta_ssid, sysCfg.sta_pwd, wifiConnectCb);
 	os_timer_disarm(&checkTimer_wifistate); //启动定时器前先取消定时器定时
 	os_timer_setfn(&checkTimer_wifistate, (os_timer_func_t *) Check_WifiState,
 	NULL); //设置定时器回调函数

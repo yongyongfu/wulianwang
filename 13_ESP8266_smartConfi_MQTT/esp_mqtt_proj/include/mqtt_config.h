@@ -7,14 +7,15 @@
 
 /*DEFAULT CONFIGURATIONS*/
 
-#define MQTT_HOST			"" //务必填写您的服务器地址
-#define MQTT_PORT			1883
+#define MQTT_HOST           "120.79.165.74" // "192.168.1.1" the IP address or domain name of your MQTT server or MQTT broker ,such as "mqtt.yourdomain.com"
+#define MQTT_PORT           1883    // the listening port of your MQTT server or MQTT broker
 #define MQTT_BUF_SIZE		1024
 #define MQTT_KEEPALIVE		120	 /*second*/
-
-#define MQTT_CLIENT_ID		"text_xuhong"
-#define MQTT_USER			"xuhong"
-#define MQTT_PASS			"what"
+#define MQTT_CLIENT_ID        "000001"    // the ID of yourself, any string is OK,client would use this ID register itself to MQTT server
+#define MQTT_USER            "zerone" // your MQTT login name, if MQTT server allow anonymous login,any string is OK, otherwise, please input valid login name which you had registered
+#define MQTT_PASS            "\0" // you MQTT login password, same as above
+//#define STA_SSID "UDOT005"    // your AP/router SSID to config your device networking
+//#define STA_PASS "udot12345678" // your AP/router password
 
 #define STA_SSID "DVES_HOME"
 #define STA_PASS "yourpassword"

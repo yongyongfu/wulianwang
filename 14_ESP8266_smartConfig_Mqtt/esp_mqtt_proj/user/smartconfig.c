@@ -57,6 +57,7 @@ void ICACHE_FLASH_ATTR smartconfig_done(sc_status status, void *pdata) {
 }
 
 void smartconfig_init(void) {
+	os_printf("SDK version:%s\n", system_get_sdk_version());
 	wifi_set_opmode(STATION_MODE);
 	smartconfig_set_type(SC_TYPE_ESPTOUCH);
 	smartconfig_start(smartconfig_done);

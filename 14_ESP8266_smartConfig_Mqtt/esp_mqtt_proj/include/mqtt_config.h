@@ -15,17 +15,16 @@ typedef enum{
 
 /*DEFAULT CONFIGURATIONS*/
 
-#define MQTT_HOST            "120.79.82.119" // the IP address or domain name of your MQTT server or MQTT broker ,such as "mqtt.yourdomain.com"
-#define MQTT_PORT            1883    // the listening port of your MQTT server or MQTT broker
-#define MQTT_CLIENT_ID        "8266_xuhong"    // the ID of yourself, any string is OK,client would use this ID register itself to MQTT server
-
-#define MQTT_USER			"xuhong"
-#define MQTT_PASS			"bkxz733633"
+#define MQTT_HOST           "120.79.165.74" // "192.168.1.1" the IP address or domain name of your MQTT server or MQTT broker ,such as "mqtt.yourdomain.com"
+#define MQTT_PORT           1883    // the listening port of your MQTT server or MQTT broker
+#define MQTT_CLIENT_ID        "000001"    // the ID of yourself, any string is OK,client would use this ID register itself to MQTT server
+#define MQTT_USER            "zerone" // your MQTT login name, if MQTT server allow anonymous login,any string is OK, otherwise, please input valid login name which you had registered
+#define MQTT_PASS            "\0" // you MQTT login password, same as above
+//#define STA_SSID "UDOT005"    // your AP/router SSID to config your device networking
+//#define STA_PASS "udot12345678" // your AP/router password
 
 #define STA_SSID "DVES_HOME"
 #define STA_PASS "yourpassword"
-
-
 #define DEFAULT_SECURITY    NO_TLS      // very important: you must config DEFAULT_SECURITY for SSL/TLS
 
 #define CA_CERT_FLASH_ADDRESS 0x77              // CA certificate address in flash to read, 0x77 means address 0x77000

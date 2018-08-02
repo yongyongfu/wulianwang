@@ -80,13 +80,13 @@ mqtt_dns_found(const char *name, ip_addr_t *ipaddr, void *arg)
         os_memcpy(client->pCon->proto.tcp->remote_ip, &ipaddr->addr, 4);
         if (client->security) {
 #ifdef MQTT_SSL_ENABLE
-            if(DEFAULT_SECURITY >= ONE_WAY_ANTHENTICATION ) {
+    /*        if(DEFAULT_SECURITY >= ONE_WAY_ANTHENTICATION ) {
                 espconn_secure_ca_enable(ESPCONN_CLIENT,CA_CERT_FLASH_ADDRESS);
             }
             if(DEFAULT_SECURITY >= TWO_WAY_ANTHENTICATION) {
                 espconn_secure_cert_req_enable(ESPCONN_CLIENT,CLIENT_CERT_FLASH_ADDRESS);
             }
-
+*/
             espconn_secure_connect(client->pCon);
 #else
             INFO("TCP: Do not support SSL\r\n");
@@ -824,12 +824,13 @@ MQTT_Connect(MQTT_Client *mqttClient)
         if (mqttClient->security)
         {
 #ifdef MQTT_SSL_ENABLE
-            if(DEFAULT_SECURITY >= ONE_WAY_ANTHENTICATION ) {
+     /*       if(DEFAULT_SECURITY >= ONE_WAY_ANTHENTICATION ) {
                 espconn_secure_ca_enable(ESPCONN_CLIENT,CA_CERT_FLASH_ADDRESS);
             }
             if(DEFAULT_SECURITY >= TWO_WAY_ANTHENTICATION) {
                 espconn_secure_cert_req_enable(ESPCONN_CLIENT,CLIENT_CERT_FLASH_ADDRESS);
-            }
+            }  
+			*/
             espconn_secure_connect(mqttClient->pCon);
 #else
             INFO("TCP: Do not support SSL\r\n");

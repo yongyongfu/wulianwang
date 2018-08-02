@@ -49,9 +49,9 @@ os_timer_t checkTimer_wifistate;
 
 //按键定义
 #define GPIO_KEY_NUM                            1
-#define KEY_0_IO_MUX                            PERIPHS_IO_MUX_MTMS_U
-#define KEY_0_IO_NUM                            14
-#define KEY_0_IO_FUNC                           FUNC_GPIO14
+#define KEY_0_IO_MUX                            PERIPHS_IO_MUX_GPIO2_U
+#define KEY_0_IO_NUM                            2
+#define KEY_0_IO_FUNC                           FUNC_GPIO2
 LOCAL key_typedef_t * singleKey[GPIO_KEY_NUM];
 LOCAL keys_typedef_t keys;
 
@@ -188,8 +188,12 @@ LOCAL void ICACHE_FLASH_ATTR keyInit(void) {
 }
 
 void user_init(void) {
-	uart_init(BIT_RATE_115200, BIT_RATE_115200);
+
+	uart_init(115200, 115200);
+
 	os_delay_us(60000);
+
+	os_printf("SDK version:%s\n", system_get_sdk_version());
 
 	//LED初始化
 	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15); //选择GPIO15，此GPIO连接是绿灯
@@ -211,8 +215,8 @@ void user_init(void) {
 	MQTT_OnDisconnected(&mqttClient, mqttDisconnectedCb);
 	MQTT_OnPublished(&mqttClient, mqttPublishedCb);
 	MQTT_OnData(&mqttClient, mqttDataCb);
-
-	os_timer_disarm(&checkTimer_wifistate);	//启动定时器前先取消定时器定时
+    WIFI_Connect(sysCfg.sta_ssid, sysCfg.sta_pwd, wifiConnectCb);
+	os_timer_disarm(&checkTimer_wifistate); //启动定时器前先取消定时器定时
 	os_timer_setfn(&checkTimer_wifistate, (os_timer_func_t *) Check_WifiState,
 	NULL);	//设置定时器回调函数
 	os_timer_arm(&checkTimer_wifistate, 1000, 1);	//启动定时器

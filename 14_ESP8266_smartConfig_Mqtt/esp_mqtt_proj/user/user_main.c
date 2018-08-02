@@ -374,16 +374,22 @@ void wendu(void)
     MQTT_Publish(&mqttClient, "out000000000001",senddata, 100, 0, 0);
 }
 
+
+
+#define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+#define MACSTR "%02x:%02x:%02x:%02x:%02x:%02x"
+char hwaddr[6];
 void user_init(void) {
 
 	uart_init(115200, 115200);
 
 	os_delay_us(60000);
+	wifi_get_macaddr(STATION_IF, hwaddr);
 
-	os_printf("SDK version:%s\n", system_get_sdk_version());
+	//MAC2STR(hwaddr);
+	//MACSTR(hwaddr);
 
 	keyInit();
-
 	CFG_Load();
 	//开始MQTT连接
     led_init();

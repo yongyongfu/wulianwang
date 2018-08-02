@@ -9,16 +9,21 @@
 #include "user_interface.h"
 #include "mem.h"
 #include "hal_key.h"
-
-//MQTT¿Í»§¶Ë
+#include "sntp.h"
+typedef unsigned   char    u8_t;
+//MQTTå®¢æˆ·ç«¯
 MQTT_Client mqttClient;
 typedef unsigned long u32_t;
 static ETSTimer sntp_timer;
 
-//¼ì²éwifiÊÇ·ñÒÑ¾­Á¬½ÓµÄ¶¨Ê±Æ÷
+//æ£€æŸ¥wifiæ˜¯å¦å·²ç»è¿æ¥çš„å®šæ—¶å™¨
 os_timer_t checkTimer_wifistate;
+static ETSTimer key_timer;
+static ETSTimer wendu_timer;
+static ETSTimer working_timer;
+u8_t bz=0,key=0;
 
-//°´¼ü¶¨Òå
+//æŒ‰é”®å®šä¹‰
 #define GPIO_KEY_NUM                            1
 #define KEY_0_IO_MUX                            PERIPHS_IO_MUX_GPIO2_U
 #define KEY_0_IO_NUM                            2
@@ -26,16 +31,58 @@ os_timer_t checkTimer_wifistate;
 LOCAL key_typedef_t * singleKey[GPIO_KEY_NUM];
 LOCAL keys_typedef_t keys;
 
-void sntpfn() {
-	u32_t ts = 0;
-	ts = sntp_get_current_timestamp();
-	os_printf("current time : %s\n", sntp_get_real_time(ts));
-	if (ts != 0) {
-		os_timer_disarm(&sntp_timer);
-		MQTT_Connect(&mqttClient);
-	}
+void sntpfn()
+{
+    u32_t ts = 0;
+    ts = sntp_get_current_timestamp();
+    os_printf("current time : %s\n", sntp_get_real_time(ts));
+    if (ts == 0) {
+        //os_printf("did not get a valid time from sntp server\n");
+    } else {
+            os_timer_disarm(&sntp_timer);
+            MQTT_Connect(&mqttClient);
+    }
+}
+#include <string.h>
+static char  senddata[100];
+#define CMD_SIZE 	100
+char userqrcode[32]="ABCDEFG1234567890";
+int temperature=1.4,humidity=1.8,light=1,pressure=2.8;
+int randval(int low, int high)
+{
+	int val;
+   val = ((int)(rand()/(RAND_MAX-0.0))*(high - low)) + low;
+   return(val);
 }
 
+void mqttConnectedCb(uint32_t *args)
+{
+    MQTT_Client* client = (MQTT_Client*)args;
+    INFO("MQTT: Connected\r\n");
+    MQTT_Subscribe(client, "in000000000001", 0);
+
+/*
+    	strcpy(senddata,"{\n\"method\":\"verifyStaff\",\n\"staffQRcode\":\"");
+    	strcat(senddata,userqrcode);
+    	strcat(senddata,"\",\n\"temperature\":\"");
+    	strcat(senddata,temperature);
+    	strcat(senddata,"\",\n\"humidity\":\"");
+    	strcat(senddata,humidity);
+    	/////
+    	strcat(senddata,"\",\n\"light\":");
+    	strcat(senddata,light);
+    	strcat(senddata,",\n\"pressure\":");
+    	strcat(senddata,pressure);
+*/
+  	//è·å–ä¼ æ„Ÿå™¨æµ‹é‡æ•°æ®ï¼Œè¯¥ç¤ºä¾‹ä½¿ç”¨éšæœºæ•°
+  	//å°†æ•°æ®åˆæˆä¸ºJSONæ ¼å¼æ•°æ®
+ //   memset(senddata,0x0,200);
+	os_sprintf(senddata,"{\"temperature\":%d,\"humidity\":%d,\"light\":%d,\"pressure\":%d}",temperature,humidity,light,pressure);// {"temperature":1.4,"humidity":3.9,"light":1,"pressure":12}
+	os_printf("%s",senddata);
+	 MQTT_Publish(client, "out000000000001",senddata, 100, 0, 0);
+
+
+}
 void wifiConnectCb(uint8_t status) {
 	if (status == STATION_GOT_IP) {
 		MQTT_Connect(&mqttClient);
@@ -44,10 +91,6 @@ void wifiConnectCb(uint8_t status) {
 	}
 }
 
-void mqttConnectedCb(uint32_t *args) {
-	MQTT_Client* client = (MQTT_Client*) args;
-	MQTT_Subscribe(client, "/xuhong/LED/in", 0); //¶©ÔÄÖ÷Ìâ/xuhong/LED/in
-}
 
 void mqttDisconnectedCb(uint32_t *args) {
 	MQTT_Client* client = (MQTT_Client*) args;
@@ -59,25 +102,76 @@ void mqttPublishedCb(uint32_t *args) {
 	INFO("MQTT: Published\r\n");
 }
 
-void mqttDataCb(uint32_t *args, const char* topic, uint32_t topic_len,
-		const char *data, uint32_t data_len) {
+void mqttDataCb(uint32_t *args, const char* topic, uint32_t topic_len, const char *data, uint32_t data_len)
+{
+    char *topicBuf = (char*)os_zalloc(topic_len+1),
+            *dataBuf = (char*)os_zalloc(data_len+1);
 
-	MQTT_Client* client = (MQTT_Client*) args;
+    MQTT_Client* client = (MQTT_Client*)args;
 
-	//Èç¹û½ÓÊÕµ½Ö¸ÁîÊÇ1£¬GPIO15Êä³öÎªµÍ,Ò²¾ÍÊÇLED¿ªµÆ£¬Í¬Ê±·¢²¼ÏûÏ¢£¬Ö÷ÌâÊÇ/xuhong/LED/out£¬ĞÅÏ¢ÊÇLED status is open ...
-	if (data[0] == '1') {
-		GPIO_OUTPUT_SET(GPIO_ID_PIN(15), 0);
-		MQTT_Publish(client, "/xuhong/LED/out", "LED status is open ...",
-				strlen("LED status is open ..."), 0, 0);
-	}
+    os_memcpy(topicBuf, topic, topic_len);
+    topicBuf[topic_len] = 0;
 
-	//Èç¹û½ÓÊÕµ½Ö¸ÁîÊÇ0£¬GPIO15Îª¸ß,Ò²¾ÍÊÇLED¹ØµÆ£¬Í¬Ê±·¢²¼ÏûÏ¢£¬Ö÷ÌâÊÇ/xuhong/LED/out£¬ĞÅÏ¢ÊÇLED status is off ...
-	if (data[0] == '0') {
-		GPIO_OUTPUT_SET(GPIO_ID_PIN(15), 1);
-		MQTT_Publish(client, "/xuhong/LED/out", "LED status is off ...",
-				strlen("LED status is off ..."), 0, 0);
-	}
+    os_memcpy(dataBuf, data, data_len);
+    dataBuf[data_len] = 0;
 
+    INFO("Receive topic: %s, data: %s \r\n", topicBuf, dataBuf);
+
+    /*
+    Receive topic: in000000000001, data: {"led":"green","value":1}
+    TCP: data received 44 bytes
+    Receive topic: in000000000001, data: {"led":"yellow","value":1}
+    TCP: data received 42 bytes
+    Receive topic: in000000000001, data: {"led":"blue","value":1}
+    TCP: data received 41 bytes
+    Receive topic: in000000000001, data: {"led":"red","value":1}
+    TCP: data received 41 bytes
+    Receive topic: in000000000001, data: {"led":"red","value":0}
+    TCP: data received 43 bytes
+    Receive topic: in000000000001, data: {"led":"green","value":0}
+    TCP: data received 44 bytes
+    Receive topic: in000000000001, data: {"led":"yellow","value":0}
+    TCP: data received 42 bytes
+    Receive topic: in000000000001, data: {"led":"blue","value":0}
+    */
+  //  if (os_strncmp(strstr, "page", 4) == 0)
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"green\",\"value\":1}")!=0)
+    {
+       GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);           //GPIO12ä¸ºé«˜
+    }
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"green\",\"value\":0}")!=0)
+    {
+       GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 0);           //GPIO12ä¸ºé«˜
+    }
+
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"yellow\",\"value\":1}")!=0)
+    {
+         GPIO_OUTPUT_SET(GPIO_ID_PIN(13), 1);           //GPIO12ä¸ºé«˜
+    }
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"yellow\",\"value\":0}")!=0)
+    {
+         GPIO_OUTPUT_SET(GPIO_ID_PIN(13), 0);           //GPIO12ä¸ºé«˜
+    }
+
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"red\",\"value\":1}")!=0)
+    {
+           GPIO_OUTPUT_SET(GPIO_ID_PIN(14), 1);           //GPIO12ä¸ºé«˜
+    }
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"red\",\"value\":0}")!=0)
+    {
+           GPIO_OUTPUT_SET(GPIO_ID_PIN(14), 0);           //GPIO12ä¸ºé«˜
+    }
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"blue\",\"value\":1}")!=0)
+     {
+            GPIO_OUTPUT_SET(GPIO_ID_PIN(16), 1);           //GPIO12ä¸ºé«˜
+     }
+    if ( (char *)os_strstr(dataBuf, "{\"led\":\"blue\",\"value\":0}")!=0)
+     {
+            GPIO_OUTPUT_SET(GPIO_ID_PIN(16), 0);           //GPIO12ä¸ºé«˜
+     }
+	 MQTT_Publish(client, "/LED/out", "LED status is open ...",strlen("LED status is open ..."), 0, 0);
+    os_free(topicBuf);
+    os_free(dataBuf);
 }
 
 uint32 ICACHE_FLASH_ATTR user_rf_cal_sector_set(void) {
@@ -116,6 +210,12 @@ uint32 ICACHE_FLASH_ATTR user_rf_cal_sector_set(void) {
 
 	return rf_cal_sec;
 }
+void ICACHE_FLASH_ATTR revUartData(uint8 * pData,int len)
+
+{
+	MQTT_Publish(&mqttClient, "out000000000001", pData, len, 0, 0);
+}
+//char wendushidu [50]= {"temperature":1.4,"humidity":3.9,"light":1,"pressure":12}
 
 void Check_WifiState(void) {
 	uint8 getState;
@@ -123,13 +223,13 @@ void Check_WifiState(void) {
 	wifi_get_ip_info(STATION_IF, &ipConfig);
 	getState = wifi_station_get_connect_status();
 
-	//²éÑ¯ ESP8266 WiFi station ½Ó¿ÚÁ¬½Ó AP µÄ×´Ì¬
+	//æŸ¥è¯¢ ESP8266 WiFi station æ¥å£è¿æ¥ AP çš„çŠ¶æ€
 	if (getState == STATION_GOT_IP && ipConfig.ip.addr != 0) {
 
-		os_printf("----- wifi Á¬½Ó³É¹¦£¡ ºìµÆ¹Ø±ÕÀ²À²£¡---\r\n");
+		os_printf("----- wifi è¿æ¥æˆåŠŸï¼ çº¢ç¯å…³é—­å•¦å•¦ï¼---\r\n");
 		GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);
 
-		os_printf("----- wifi Á¬½Ó³É¹¦£¡ ¶Ï¿ª¶¨Ê±Æ÷À²£¡---\r\n");
+		os_printf("----- wifi è¿æ¥æˆåŠŸï¼ æ–­å¼€å®šæ—¶å™¨å•¦ï¼---\r\n");
 		os_timer_disarm(&checkTimer_wifistate);
 
 		sntp_setservername(0, "pool.ntp.org"); // set sntp server after got ip address
@@ -146,16 +246,132 @@ LOCAL void ICACHE_FLASH_ATTR keyLongPress(void) {
 }
 
 LOCAL void ICACHE_FLASH_ATTR keyShortPress(void) {
-	os_printf("---------- °´¼ü´¥·¢ £¬¿ªÊ¼½øÈ¥SmartConfigÅäÍø \n\n\n-----");
+	os_printf("---------- æŒ‰é”®è§¦å‘ ï¼Œå¼€å§‹è¿›å»SmartConfigé…ç½‘ \n\n\n-----");
 	smartconfig_init();
 }
 
-//°´¼ü³õÊ¼»¯
+//æŒ‰é”®åˆå§‹åŒ–
 LOCAL void ICACHE_FLASH_ATTR keyInit(void) {
 	singleKey[0] = keyInitOne(KEY_0_IO_NUM, KEY_0_IO_MUX, KEY_0_IO_FUNC,
 			keyLongPress, keyShortPress);
 	keys.singleKey = singleKey;
 	keyParaInit(&keys);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#include "gpio.h"  //ç«¯å£æ§åˆ¶éœ€è¦çš„å¤´æ–‡ä»¶
+
+void delay_ms(uint16 x)
+{
+    for(;x>0;x--)
+    {
+      os_delay_us(1000);
+    }
+}
+
+void  led_init()//åˆå§‹åŒ–
+{
+    PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDI_U, FUNC_GPIO12);//é€‰æ‹©GPIO12
+    GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 0);//GPIO14ä¸ºé«˜
+
+    PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTCK_U, FUNC_GPIO13);//é€‰æ‹©GPIO13
+    GPIO_OUTPUT_SET(GPIO_ID_PIN(13), 0);//GPIO14ä¸ºé«˜
+
+    PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTMS_U, FUNC_GPIO14);//é€‰æ‹©GPIO14
+    GPIO_OUTPUT_SET(GPIO_ID_PIN(14), 0);//GPIO14ä¸ºé«˜
+
+    PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15);//é€‰æ‹©GPIO14
+    GPIO_OUTPUT_SET(GPIO_ID_PIN(15), 0);//GPIO14ä¸ºé«˜
+
+    PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO2_U,FUNC_GPIO2);//é€‰æ‹©GPIO2
+    GPIO_DIS_OUTPUT(GPIO_ID_PIN(2)) ; // è®¾ç½®GPIO2ä¸ºè¾“å…¥
+}
+uint8 workcon=0;
+void working(void)
+{
+    workcon++;
+//system_soft_wdt_feed();//è¿™é‡Œæˆ‘ä»¬å–‚ä¸‹çœ‹é—¨ç‹—  ï¼Œä¸è®©çœ‹é—¨ç‹—å¤ä½
+    if(workcon%2)
+    {
+		 GPIO_OUTPUT_SET(GPIO_ID_PIN(15), 1);           //GPIO14ä¸ºé«˜
+    }
+    else
+    {
+         GPIO_OUTPUT_SET(GPIO_ID_PIN(15), 0);           //GPIO14ä¸ºé«˜
+    }
+}
+
+void lenkey(void)
+{
+	char GPIO_PIN=0;
+	switch(bz)
+	{
+		case 0:if(GPIO_INPUT_GET(GPIO_ID_PIN(2))==0x00) bz=1;
+			break;
+		case 1:if(GPIO_INPUT_GET(GPIO_ID_PIN(2))==0x00)
+		       {
+			     delay_ms(20); //å»¶æ—¶20MSï¼Œå»æŠ–
+			     if(GPIO_INPUT_GET(GPIO_ID_PIN(2))==0x00)
+			       {
+						 key=~key;
+						 bz=2;
+						 GPIO_PIN=2;
+					//     memset(senddata,0x0,200);
+						 os_sprintf(senddata,"{\"GPIO_INPUT\":%d}",GPIO_PIN);
+						 os_printf("%s",senddata);
+						 MQTT_Publish(&mqttClient, "out000000000001", senddata, 20, 0, 0);
+					//	 GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);           //GPIO12ä¸ºé«˜
+					//	 GPIO_OUTPUT_SET(GPIO_ID_PIN(13), 1);           //GPIO13ä¸ºé«˜
+					//	 GPIO_OUTPUT_SET(GPIO_ID_PIN(14), 1);           //GPIO14ä¸ºé«˜
+			       }
+		       }
+		       else
+		       {
+		    	         bz=0;
+
+		       }
+			break;
+		case 2:if(GPIO_INPUT_GET(GPIO_ID_PIN(2))!=0x00) bz=0;
+			break;
+	}
+	if(key)
+	   {
+			GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 0);           //GPIO12ÃÂªÂ¸ÃŸ
+			GPIO_OUTPUT_SET(GPIO_ID_PIN(13), 0);           //GPIO13ÃÂªÂ¸ÃŸ
+			GPIO_OUTPUT_SET(GPIO_ID_PIN(14), 0);           //GPIO14ÃÂªÂ¸ÃŸ
+		}
+	else{
+		    GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 1);           //GPIO12ä¸ºé«˜
+			GPIO_OUTPUT_SET(GPIO_ID_PIN(13), 1);           //GPIO13ä¸ºé«˜
+			GPIO_OUTPUT_SET(GPIO_ID_PIN(14), 1);           //GPIO14ä¸ºé«˜
+		}
+
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+ *
+ * è¯»å–æ¸©æ¹¿åº¦æ•°æ®ï¼Œç„¶åå‘é€åˆ°MQTTæœåŠ¡å™¨ä¸Šå»
+ *
+*/
+
+#include "ets_sys.h"
+#include "osapi.h"
+#include "ip_addr.h"
+#include "mem.h"
+#include "user_interface.h"
+#include "c_types.h"
+
+void wendu(void)
+{
+	temperature=rand()%40;
+	humidity=rand()%90;
+	light=rand()%5000;
+	pressure=rand()%6000;
+//	memset(senddata,0x0,200);
+	os_sprintf(senddata,"{\"temperature\":%d,\"humidity\":%d,\"light\":%d,\"pressure\":%d}",temperature,humidity,light,pressure);
+    MQTT_Publish(&mqttClient, "out000000000001",senddata, 100, 0, 0);
 }
 
 void user_init(void) {
@@ -166,32 +382,30 @@ void user_init(void) {
 
 	os_printf("SDK version:%s\n", system_get_sdk_version());
 
-	//LED³õÊ¼»¯
-	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDO_U, FUNC_GPIO15);//Ñ¡ÔñGPIO15£¬´ËGPIOÁ¬½ÓÊÇÂÌµÆ
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(15), 1); //Ä¬ÈÏGPIO15Îª¸ß,Ò²¾ÍÊÇ¹ØµÆ
-
-	PIN_FUNC_SELECT(PERIPHS_IO_MUX_MTDI_U, FUNC_GPIO12); //Ñ¡ÔñGPIO12£¬´ËGPIOÁ¬½ÓÊÇºìµÆ
-	GPIO_OUTPUT_SET(GPIO_ID_PIN(12), 0); //Ä¬ÈÏGPIO12ÎªµÍ,Ò²¾ÍÊÇ¿ªµÆ£¬±íÊ¾ÅäÍø²»³É¹¦£¡
-
-
 	keyInit();
 
 	CFG_Load();
-	//¿ªÊ¼MQTTÁ¬½Ó
-	MQTT_InitConnection(&mqttClient, sysCfg.mqtt_host, sysCfg.mqtt_port,
-			sysCfg.security);
-	MQTT_InitClient(&mqttClient, sysCfg.device_id, sysCfg.mqtt_user,
-			sysCfg.mqtt_pass, sysCfg.mqtt_keepalive, 1);
+	//å¼€å§‹MQTTè¿æ¥
+    led_init();
+	MQTT_InitConnection(&mqttClient, sysCfg.mqtt_host, sysCfg.mqtt_port,sysCfg.security);
+	MQTT_InitClient(&mqttClient, sysCfg.device_id, sysCfg.mqtt_user,sysCfg.mqtt_pass, sysCfg.mqtt_keepalive, 1);
 	MQTT_InitLWT(&mqttClient, "/lwt", "offline", 0, 0);
 	MQTT_OnConnected(&mqttClient, mqttConnectedCb);
 	MQTT_OnDisconnected(&mqttClient, mqttDisconnectedCb);
 	MQTT_OnPublished(&mqttClient, mqttPublishedCb);
 	MQTT_OnData(&mqttClient, mqttDataCb);
   //  WIFI_Connect(sysCfg.sta_ssid, sysCfg.sta_pwd, wifiConnectCb);
-	os_timer_disarm(&checkTimer_wifistate); //Æô¶¯¶¨Ê±Æ÷Ç°ÏÈÈ¡Ïû¶¨Ê±Æ÷¶¨Ê±
+	os_timer_disarm(&checkTimer_wifistate);  //å¯åŠ¨å®šæ—¶å™¨å‰å…ˆå–æ¶ˆå®šæ—¶å™¨å®šæ—¶
 	os_timer_setfn(&checkTimer_wifistate, (os_timer_func_t *) Check_WifiState,
-	NULL); //ÉèÖÃ¶¨Ê±Æ÷»Øµ÷º¯Êı
-	os_timer_arm(&checkTimer_wifistate, 1000, 1); //Æô¶¯¶¨Ê±Æ÷
+	NULL); //è®¾ç½®å®šæ—¶å™¨å›è°ƒå‡½æ•°
+	os_timer_arm(&checkTimer_wifistate, 1000, 1); //å¯åŠ¨å®šæ—¶å™¨
 
 	INFO("\r\nSystem started ...\r\n");
+	os_timer_disarm(&wendu_timer);
+    os_timer_setfn(&wendu_timer, (os_timer_func_t *)wendu, NULL);
+    os_timer_arm(&wendu_timer, 10000, 1);//1ms
+	
+	os_timer_disarm(&working_timer);
+    os_timer_setfn(&working_timer, (os_timer_func_t *)working, NULL);
+    os_timer_arm(&working_timer, 2000, 1);//1ms
 }
